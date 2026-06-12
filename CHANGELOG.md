@@ -7,19 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [0.0.2] - yyyy-mm-dd
-
-### Changed
-
-- A changelog is a file which contains a curated, chronologically ordered list of notable changes for each version of a project.
-
-## [0.0.1] - yyyy-mm-dd
+## [1.0.0] - 2026-06-15
 
 ### Added
 
-- To make it easier for users and contributors to see precisely what notable changes have been made between each release (or version) of the project.
+- Initial release of `@klarna/add-to-klarna`.
+- `createAddToKlarnaClient({ region, environment })` factory with support for
+  `eu` / `us` / `ap` regions and `production` / `staging` environments.
+- `client.buildLink({ brandNickname, inputId })` to produce a fully-formed,
+  JWE-encrypted Klarna universal link.
+- `client.redirect({ brandNickname, inputId })` to navigate the browser
+  directly to the generated link.
+- Region-aware JWKS key selection via the `kid-{region}-` prefix.
+- Typed `AddToKlarnaError` with stable `.code` values
+  (`INVALID_CONFIG`, `INVALID_INPUT`, `JWKS_FETCH_FAILED`, `JWKS_INVALID`,
+  `NO_MATCHING_KEY`, `ENCRYPTION_FAILED`, `NAVIGATION_UNAVAILABLE`) and an
+  `isAddToKlarnaError` type guard.
+- Dual ESM + CJS build with TypeScript declarations, isomorphic for modern
+  browsers and Node ≥ 20.
 
 <!-- Markdown link dfn's -->
-[unreleased]: https://github.com/klarna-incubator/TODO/compare/v1.1.0...HEAD
-[0.0.2]: https://github.com/klarna-incubator/TODO/compare/v0.0.1...v0.0.2
-[0.0.1]: https://github.com/klarna-incubator/TODO/releases/tag/v0.0.1
+[unreleased]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/klarna-incubator/add-to-klarna-js/releases/tag/v1.0.0

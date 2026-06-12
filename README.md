@@ -1,51 +1,181 @@
-# Project Name
-> Short blurb about what your project does.
+# @klarna/add-to-klarna
+> Merchant integration library for generating Klarna "Add to Klarna" universal links.
 
 [![Build Status][ci-image]][ci-url]
 [![License][license-image]][license-url]
 [![Developed at Klarna][klarna-image]][klarna-url]
 
 
-One to two paragraph statement about your project and what it does.
+Lets a merchant page turn a `brandNickname` + `inputId` into a fully encrypted Klarna universal link in one call, without the merchant having to touch JWE, JWKS, key rotation, or URL encoding.
 
-## First steps
+## Install
 
-<details>
- <summary>Installation (for Admins)</summary>
-  
-  Currently, new repositories can be created only by a Klarna Open Source community lead. Please reach out to us if you need assistance.
-  
-  1. Create a new repository by clicking ‘Use this template’ button.
-  
-  2. Make sure your newly created repository is private.
-  
-  3. Enable Dependabot alerts in your candidate repo settings under Security & analysis. You need to enable ‘Allow GitHub to perform read-only analysis of this repository’ first.
-</details>
+```bash
+yarn add @klarna/add-to-klarna
+# or
+npm install @klarna/add-to-klarna
+```
 
-1. Update `README.md` and `CHANGELOG.md`.
+The package is isomorphic. It works in:
 
-2. Optionally, clone [the default contributing guide](https://github.com/klarna-incubator/.github/blob/main/CONTRIBUTING.md) into `.github/CONTRIBUTING.md`.
+- modern browsers (uses Web Crypto + `fetch`),
+- Node ≥ 20 (uses the built-in Web Crypto and global `fetch`).
 
-3. Do *not* edit `LICENSE`.
+It has a single runtime dependency: [`jose`](https://github.com/panva/jose).
 
-## Usage example
+## Quick start
 
-A few motivating and useful examples of how your project can be used. Spice this up with code blocks and potentially more screenshots.
+```ts
+import { createAddToKlarnaClient } from "@klarna/add-to-klarna";
 
-_For more examples and usage, please refer to the [Docs](TODO)._
+const klarna = createAddToKlarnaClient({ region: "eu" });
+
+document.querySelector("#add-to-klarna-button")?.addEventListener("click", async () => {
+  await klarna.redirect({
+    brandNickname: "your-brand-nickname",
+    inputId: "your-customer-id",
+  });
+});
+```
+
+`redirect()` calls `window.location.assign(...)` with the generated link. If
+you want the URL without navigating (e.g. to put in an `<a href>` or to send
+in an email from a server), use `buildLink()`:
+
+```ts
+const url = await klarna.buildLink({
+  brandNickname: "your-brand-nickname",
+  inputId: "your-customer-id",
+});
+```
+
+## Configuration
+
+Just two options. Only `region` is required — `environment` defaults to
+`"production"`, so a merchant integration can usually pass just the region.
+
+| Option        | Type                        | Default        | Description                                                                                      |
+| ------------- | --------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `environment` | `"production" \| "staging"` | `"production"` | Which Klarna deployment to target. Picks both the JWKS endpoint and the universal-link base URL. |
+| `region`      | `"eu" \| "us" \| "ap"`      | _(required)_   | Which deployment region to target. Picks the key inside the JWKS via a `kid-{region}-` prefix.   |
+
+That's it. There are no other knobs — by design. The JWKS endpoint, the
+universal-link host, the clock, the UUID generator, and the `fetch`
+implementation are all fixed (the library uses `globalThis.fetch`,
+`Date.now`, and `globalThis.crypto.randomUUID`).
+
+## URL shape
+
+The library always emits a URL of this shape:
+
+```
+<base>/<brandNickname>/<base64UrlEncodedPayload>
+```
+
+The `<base>` is fixed per environment (and already contains the
+`/add-to-klarna` route segment):
+
+| Environment  | Base URL                                                |
+| ------------ | ------------------------------------------------------- |
+| `production` | `https://app.klarna.com/loyalty-cards-v2/add-to-klarna` |
+| `staging`    | `klarnadev://loyalty-cards-v2/add-to-klarna`            |
+
+The `<base64UrlEncodedPayload>` is the JWE compact serialization wrapped in an
+extra base64url so the entire ciphertext fits in a single URL path component.
+
+## API
+
+### `createAddToKlarnaClient(options)`
+
+Returns an `AddToKlarnaClient`. Construction is cheap and synchronous; the
+first network call happens on the first `buildLink` / `redirect`.
+
+### `client.buildLink({ brandNickname, inputId })`
+
+Returns `Promise<string>` — the fully-formed universal link URL.
+
+A fresh `linkId` is minted on every call (and embedded inside the encrypted
+payload, not exposed on the surface). The Klarna backend enforces single-use
+semantics, so do **not** cache the returned URL — generate a new one per
+click.
+
+### `client.redirect({ brandNickname, inputId })`
+
+Calls `buildLink()` and then `window.location.assign(url)`. Throws
+`AddToKlarnaError` with `code: "NAVIGATION_UNAVAILABLE"` if `window` is not
+present.
+
+## Caching
+
+The library does **not** maintain any in-memory cache. Every `buildLink`
+re-fetches the JWKS. Caching is delegated to the HTTP layer:
+
+- the production JWKS is served from `app.klarna.com` through Klarna's CDN,
+  which sets the `Cache-Control` policy authoritatively;
+- the browser's HTTP cache (or Node's fetch cache, where configured) honors
+  those headers on subsequent calls.
+
+This means a key rotation propagates as soon as the CDN edge cache expires —
+no client release required.
+
+## Key selection by region
+
+Both published JWKS files contain keys for every region. Each key is
+namespaced by its `kid`, which always starts with `kid-{region}-`:
+
+```
+kid-eu-66caf84b-…
+kid-us-…
+kid-ap-…
+```
+
+`region` in the client options decides which prefix the library filters for.
+A region with no matching key in the JWKS produces a typed
+`NO_MATCHING_KEY` error rather than silently picking the wrong region.
+
+## Errors
+
+Every failure surfaces as an `AddToKlarnaError` with a stable `.code`. Branch
+on the code, not on the message.
+
+| Code                     | Meaning                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| `INVALID_CONFIG`         | A client option was invalid (e.g. unknown `environment` or `region`).              |
+| `INVALID_INPUT`          | Missing / malformed `brandNickname` or `inputId`.                                  |
+| `JWKS_FETCH_FAILED`      | Could not reach the JWKS endpoint, or the endpoint returned a non-2xx HTTP status. |
+| `JWKS_INVALID`           | The JWKS body was not valid JSON, or did not contain a `keys` array.               |
+| `NO_MATCHING_KEY`        | The JWKS contains no key with the `kid-{region}-` prefix and a usable `alg`.       |
+| `ENCRYPTION_FAILED`      | The JWE could not be produced (key import or encryption step threw).               |
+| `NAVIGATION_UNAVAILABLE` | `redirect()` was called outside a browser context.                                 |
+
+```ts
+import { AddToKlarnaError, isAddToKlarnaError } from "@klarna/add-to-klarna";
+
+try {
+  await klarna.redirect({ brandNickname, inputId });
+} catch (err) {
+  if (isAddToKlarnaError(err) && err.code === "JWKS_FETCH_FAILED") {
+    // Show a connectivity error UI.
+  } else {
+    throw err;
+  }
+}
+```
 
 ## Development setup
 
-Describe how to install all development dependencies and how to run an automated test-suite of some kind. Potentially do this for multiple platforms.
-
-```sh
-make install
-npm test
+```bash
+yarn install
+yarn test         # jest, one shot
+yarn test:watch   # jest, watch mode
+yarn typecheck    # tsc --noEmit
+yarn lint
+yarn build        # tsup → ESM + CJS + .d.ts in dist/
 ```
 
-## How to contribute
-
-See our guide on [contributing](.github/CONTRIBUTING.md).
+Tests use [Jest](https://jestjs.io/) with `ts-jest`'s ESM preset. They mock
+`globalThis.fetch`, `Date.now` and `globalThis.crypto.randomUUID` via
+`jest.spyOn` / `jest.fn` rather than relying on dependency injection.
 
 ## Release History
 
@@ -53,9 +183,9 @@ See our [changelog](CHANGELOG.md).
 
 ## License
 
-Copyright © 2022 Klarna Bank AB
+Copyright © 2026 Klarna Bank AB
 
-For license details, see the [LICENSE](LICENSE) file in the root of this project.
+Licensed under the [Apache License, Version 2.0](./LICENSE). For license details, see the [LICENSE](LICENSE) file in the root of this project.
 
 
 <!-- Markdown link & img dfn's -->
