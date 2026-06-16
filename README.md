@@ -1,10 +1,10 @@
 # @klarna/add-to-klarna
+
 > Merchant integration library for generating Klarna "Add to Klarna" universal links.
 
 [![Build Status][ci-image]][ci-url]
 [![License][license-image]][license-url]
 [![Developed at Klarna][klarna-image]][klarna-url]
-
 
 Lets a merchant page turn a `brandNickname` + `inputId` into a fully encrypted Klarna universal link in one call, without the merchant having to touch JWE, JWKS, key rotation, or URL encoding.
 
@@ -83,14 +83,12 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 
   const klarna = createAddToKlarnaClient({ region: "eu" });
 
-  document
-    .querySelector("#add-to-klarna-button")
-    ?.addEventListener("click", async () => {
-      await klarna.redirect({
-        brandNickname: "your-brand-nickname",
-        inputId: "your-customer-id",
-      });
+  document.querySelector("#add-to-klarna-button")?.addEventListener("click", async () => {
+    await klarna.redirect({
+      brandNickname: "your-brand-nickname",
+      inputId: "your-customer-id",
     });
+  });
 </script>
 ```
 
@@ -238,8 +236,8 @@ Copyright © 2026 Klarna Bank AB
 
 Licensed under the [Apache License, Version 2.0](./LICENSE). For license details, see the [LICENSE](LICENSE) file in the root of this project.
 
-
 <!-- Markdown link & img dfn's -->
+
 [ci-image]: https://img.shields.io/badge/build-passing-brightgreen?style=flat-square
 [ci-url]: https://github.com/klarna-incubator/TODO
 [license-image]: https://img.shields.io/badge/license-Apache%202-blue?style=flat-square
