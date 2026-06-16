@@ -49,6 +49,57 @@ const url = await klarna.buildLink({
 });
 ```
 
+## Without a build step
+
+The published package also works without a bundler.
+
+### Node (CommonJS)
+
+The package ships both ESM and CJS entry points, so `require` works the same
+as `import`:
+
+```js
+const { createAddToKlarnaClient } = require("@klarna/add-to-klarna");
+
+const klarna = createAddToKlarnaClient({ region: "eu" });
+
+(async () => {
+  const url = await klarna.buildLink({
+    brandNickname: "your-brand-nickname",
+    inputId: "your-customer-id",
+  });
+  console.log(url);
+})();
+```
+
+### Browser (`<script type="module">` from a CDN)
+
+Drop the library straight into an HTML page via an ESM-aware CDN — no
+`npm`, no bundler:
+
+```html
+<script type="module">
+  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@1.0.0";
+
+  const klarna = createAddToKlarnaClient({ region: "eu" });
+
+  document
+    .querySelector("#add-to-klarna-button")
+    ?.addEventListener("click", async () => {
+      await klarna.redirect({
+        brandNickname: "your-brand-nickname",
+        inputId: "your-customer-id",
+      });
+    });
+</script>
+```
+
+`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@1.0.0/+esm`,
+and `https://unpkg.com/@klarna/add-to-klarna@1.0.0?module` all serve the
+ESM build and resolve the `jose` dependency transparently. Always pin a
+version in production so a future release can't change behaviour under
+your page.
+
 ## Configuration
 
 Just two options. Only `region` is required — `environment` defaults to
