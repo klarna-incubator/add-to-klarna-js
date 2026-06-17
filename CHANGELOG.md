@@ -27,5 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   browsers and Node ≥ 20.
 
 <!-- Markdown link dfn's -->
+
 [unreleased]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/klarna-incubator/add-to-klarna-js/releases/tag/v1.0.0
