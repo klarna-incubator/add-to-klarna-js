@@ -182,20 +182,42 @@ kid-ap-…
 A region with no matching key in the JWKS produces a typed
 `NO_MATCHING_KEY` error rather than silently picking the wrong region.
 
+## Security model
+
+The JWKS is fetched over HTTPS from `app.klarna.com`; certificate
+validation is delegated to Web PKI + HSTS. The library doesn't ship
+custom cert pinning — no portable browser API for it, and the cost of
+rotating a pin across every merchant integration outweighs the marginal
+protection.
+
+The JWE profile is pinned end-to-end instead:
+
+| Field | Pinned value     |
+| ----- | ---------------- |
+| `use` | `enc`            |
+| `alg` | `ECDH-ES+A256KW` |
+| `kty` | `EC`             |
+| `crv` | `P-256`          |
+| `enc` | `A256GCM`        |
+
+Any JWKS key not matching this tuple is rejected with `NO_MATCHING_KEY`,
+so drift or a substituted JWKS fails closed rather than silently
+downgrading.
+
 ## Errors
 
 Every failure surfaces as an `AddToKlarnaError` with a stable `.code`. Branch
 on the code, not on the message.
 
-| Code                     | Meaning                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------- |
-| `INVALID_CONFIG`         | A client option was invalid (e.g. unknown `environment` or `region`).              |
-| `INVALID_INPUT`          | Missing / malformed `brandNickname` or `inputId`.                                  |
-| `JWKS_FETCH_FAILED`      | Could not reach the JWKS endpoint, or the endpoint returned a non-2xx HTTP status. |
-| `JWKS_INVALID`           | The JWKS body was not valid JSON, or did not contain a `keys` array.               |
-| `NO_MATCHING_KEY`        | The JWKS contains no key with the `kid-{region}-` prefix and a usable `alg`.       |
-| `ENCRYPTION_FAILED`      | The JWE could not be produced (key import or encryption step threw).               |
-| `NAVIGATION_UNAVAILABLE` | `redirect()` was called outside a browser context.                                 |
+| Code                     | Meaning                                                                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_CONFIG`         | A client option was invalid (e.g. unknown `environment` or `region`).                                                        |
+| `INVALID_INPUT`          | Missing / malformed `brandNickname` or `inputId`.                                                                            |
+| `JWKS_FETCH_FAILED`      | Could not reach the JWKS endpoint, or the endpoint returned a non-2xx HTTP status.                                           |
+| `JWKS_INVALID`           | The JWKS body was not valid JSON, or did not contain a `keys` array.                                                         |
+| `NO_MATCHING_KEY`        | The JWKS contains no key with the `kid-{region}-` prefix matching the pinned `alg`/`kty`/`crv` tuple (see _Security model_). |
+| `ENCRYPTION_FAILED`      | The JWE could not be produced (key import or encryption step threw).                                                         |
+| `NAVIGATION_UNAVAILABLE` | `redirect()` was called outside a browser context.                                                                           |
 
 ```ts
 import { AddToKlarnaError, isAddToKlarnaError } from "@klarna/add-to-klarna";

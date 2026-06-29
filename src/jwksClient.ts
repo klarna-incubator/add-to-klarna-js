@@ -1,5 +1,6 @@
 import type { JWK } from "jose";
 
+import { ALG } from "./encryptJwe.js";
 import { AddToKlarnaError } from "./errors.js";
 import type { Region } from "./types.js";
 
@@ -10,6 +11,23 @@ import type { Region } from "./types.js";
 export interface Jwks {
   keys: Array<JWK & { kid?: string; alg?: string; use?: string }>;
 }
+
+/**
+ * The single key shape this library accepts off the JWKS. Pinned to the
+ * tuple Klarna's backend publishes today:
+ *
+ *     alg = ECDH-ES+A256KW
+ *     kty = EC
+ *     crv = P-256
+ *
+ * Anything else is rejected with `NO_MATCHING_KEY`, so a JWKS that ever
+ * drifts off this profile — whether by mistake or because someone
+ * managed to substitute it past TLS — fails closed instead of
+ * silently using a weaker or symmetric algorithm. Any change to this
+ * tuple is an SDK-coordinated event with the backend.
+ */
+const REQUIRED_KTY = "EC";
+const REQUIRED_CRV = "P-256";
 
 /**
  * Fetch and parse the JWKS at `url`. There is no in-memory cache — caching is
@@ -47,36 +65,36 @@ export async function fetchJwks(url: string): Promise<Jwks> {
 /**
  * Pick the encryption key for `region` from a JWKS document.
  *
- * Selection rules, in order:
+ * A key is usable iff it declares all of:
  *
- * 1. Keys must declare `use === "enc"` (RFC 7517). Signing keys and keys that
- *    don't set `use` explicitly are rejected.
- * 2. Keys must have a `kid` starting with `kid-{region}-`. The published JWKS
- *    files mix keys for every region; the prefix is how we route.
- * 3. If multiple keys match, the first one in document order wins. The JWKS
- *    is published with the most recent key first.
+ *   - `use === "enc"`
+ *   - `kid` starting with `kid-{region}-`
+ *   - `alg === ALG`, `kty === "EC"`, `crv === "P-256"` (see file header)
  *
- * Throws `NO_MATCHING_KEY` when nothing matches.
+ * If multiple keys match, the first one in document order wins — the JWKS
+ * is published with the most recent key first. Throws `NO_MATCHING_KEY`
+ * when nothing matches.
  */
-export function pickEncryptionKey(jwks: Jwks, region: Region): JWK & { kid: string; alg: string } {
+export function pickEncryptionKey(jwks: Jwks, region: Region): JWK & { kid: string } {
   const prefix = `kid-${region}-`;
   const chosen = jwks.keys.find(
-    (k) => k.use === "enc" && typeof k.kid === "string" && k.kid.startsWith(prefix),
+    (k) =>
+      k.use === "enc" &&
+      typeof k.kid === "string" &&
+      k.kid.startsWith(prefix) &&
+      k.alg === ALG &&
+      k.kty === REQUIRED_KTY &&
+      k.crv === REQUIRED_CRV,
   );
 
   if (!chosen || typeof chosen.kid !== "string") {
     throw new AddToKlarnaError(
       "NO_MATCHING_KEY",
-      `JWKS contains no encryption key (use="enc") with kid prefix "${prefix}".`,
+      `JWKS contains no usable encryption key with kid prefix "${prefix}" ` +
+        `(need use="enc", alg="${ALG}", kty="${REQUIRED_KTY}", crv="${REQUIRED_CRV}").`,
     );
   }
-  if (typeof chosen.alg !== "string" || chosen.alg.length === 0) {
-    throw new AddToKlarnaError(
-      "NO_MATCHING_KEY",
-      `JWKS key ${chosen.kid} has no "alg" — cannot select a JWE key encryption algorithm.`,
-    );
-  }
-  return chosen as JWK & { kid: string; alg: string };
+  return chosen as JWK & { kid: string };
 }
 
 function assertJwks(body: unknown): Jwks {

@@ -18,12 +18,13 @@ export interface TestKeypair {
 
 /**
  * Generate a fresh keypair and assemble a JWKS that exposes its public half.
+ * Defaults to the pinned production profile (ECDH-ES+A256KW over EC P-256).
  * Used by every test that needs to round-trip through real crypto rather
  * than mocking out the encryptor.
  */
 export async function generateTestKeypair(
   kid = "kid-test-eu-1",
-  alg = "RSA-OAEP-256",
+  alg = "ECDH-ES+A256KW",
 ): Promise<TestKeypair> {
   const { publicKey, privateKey } = await generateKeyPair(alg, { extractable: true });
   const publicJwk = {
