@@ -6,7 +6,17 @@ import { fetchJwks, pickEncryptionKey } from "../src/jwksClient.js";
 const URL_UNDER_TEST = "https://test.invalid/jwks.json";
 
 const sampleJwks = {
-  keys: [{ kid: "kid-eu-1", alg: "RSA-OAEP-256", kty: "RSA", n: "x", e: "AQAB", use: "enc" }],
+  keys: [
+    {
+      kid: "kid-eu-1",
+      alg: "ECDH-ES+A256KW",
+      kty: "EC",
+      crv: "P-256",
+      use: "enc",
+      x: "x",
+      y: "y",
+    },
+  ],
 };
 
 describe("fetchJwks", () => {
@@ -122,8 +132,16 @@ describe("pickEncryptionKey (region routing)", () => {
     const chosen = pickEncryptionKey(
       {
         keys: [
-          { kid: "kid-eu-sig", alg: "RS256", kty: "RSA", use: "sig", n: "x", e: "AQAB" },
-          { kid: "kid-eu-enc", alg: "RSA-OAEP-256", kty: "RSA", use: "enc", n: "x", e: "AQAB" },
+          { kid: "kid-eu-sig", alg: "ES256", kty: "EC", crv: "P-256", use: "sig", x: "x", y: "y" },
+          {
+            kid: "kid-eu-enc",
+            alg: "ECDH-ES+A256KW",
+            kty: "EC",
+            crv: "P-256",
+            use: "enc",
+            x: "x",
+            y: "y",
+          },
         ],
       },
       "eu",
@@ -134,7 +152,18 @@ describe("pickEncryptionKey (region routing)", () => {
   it("rejects a region match that does not declare use=enc", () => {
     expect(() =>
       pickEncryptionKey(
-        { keys: [{ kid: "kid-eu-bare", alg: "RSA-OAEP-256", kty: "RSA", n: "x", e: "AQAB" }] },
+        {
+          keys: [
+            {
+              kid: "kid-eu-bare",
+              alg: "ECDH-ES+A256KW",
+              kty: "EC",
+              crv: "P-256",
+              x: "x",
+              y: "y",
+            },
+          ],
+        },
         "eu",
       ),
     ).toThrow(AddToKlarnaError);
@@ -145,7 +174,15 @@ describe("pickEncryptionKey (region routing)", () => {
       pickEncryptionKey(
         {
           keys: [
-            { kid: "kid-eu-sig-only", alg: "RS256", kty: "RSA", use: "sig", n: "x", e: "AQAB" },
+            {
+              kid: "kid-eu-sig-only",
+              alg: "ES256",
+              kty: "EC",
+              crv: "P-256",
+              use: "sig",
+              x: "x",
+              y: "y",
+            },
           ],
         },
         "eu",
@@ -156,7 +193,19 @@ describe("pickEncryptionKey (region routing)", () => {
   it("throws NO_MATCHING_KEY when no key matches the region prefix", () => {
     expect(() =>
       pickEncryptionKey(
-        { keys: [{ kid: "kid-us-only", alg: "RSA-OAEP-256", kty: "RSA", n: "x", e: "AQAB" }] },
+        {
+          keys: [
+            {
+              kid: "kid-us-only",
+              alg: "ECDH-ES+A256KW",
+              kty: "EC",
+              crv: "P-256",
+              use: "enc",
+              x: "x",
+              y: "y",
+            },
+          ],
+        },
         "eu",
       ),
     ).toThrow(AddToKlarnaError);
@@ -165,9 +214,77 @@ describe("pickEncryptionKey (region routing)", () => {
   it("throws NO_MATCHING_KEY when the matching key has no alg", () => {
     expect(() =>
       pickEncryptionKey(
-        { keys: [{ kid: "kid-eu-bare", kty: "RSA", use: "enc", n: "x", e: "AQAB" }] },
+        {
+          keys: [{ kid: "kid-eu-bare", kty: "EC", crv: "P-256", use: "enc", x: "x", y: "y" }],
+        },
         "eu",
       ),
     ).toThrow(AddToKlarnaError);
+  });
+});
+
+describe("pickEncryptionKey (key pinning)", () => {
+  // Helper that returns a JWK matching the pinned profile. Tests then mutate
+  // one field at a time to verify each pin closes the door it's supposed to.
+  const valid = (kid: string) => ({
+    kid,
+    alg: "ECDH-ES+A256KW",
+    kty: "EC",
+    crv: "P-256",
+    use: "enc",
+    x: "x",
+    y: "y",
+  });
+
+  it("accepts the production profile", () => {
+    const chosen = pickEncryptionKey({ keys: [valid("kid-eu-prod")] }, "eu");
+    expect(chosen.kid).toBe("kid-eu-prod");
+  });
+
+  it("rejects a wrong alg (e.g. RSA-OAEP-256)", () => {
+    expect(() =>
+      pickEncryptionKey({ keys: [{ ...valid("kid-eu-rsa-oaep"), alg: "RSA-OAEP-256" }] }, "eu"),
+    ).toThrow(AddToKlarnaError);
+  });
+
+  it("rejects a wrong kty (e.g. RSA on the right alg)", () => {
+    expect(() =>
+      pickEncryptionKey({ keys: [{ ...valid("kid-eu-rsa-kty"), kty: "RSA" }] }, "eu"),
+    ).toThrow(AddToKlarnaError);
+  });
+
+  it("rejects a wrong crv (e.g. secp256k1)", () => {
+    expect(() =>
+      pickEncryptionKey({ keys: [{ ...valid("kid-eu-k1"), crv: "secp256k1" }] }, "eu"),
+    ).toThrow(AddToKlarnaError);
+  });
+
+  it("rejects a symmetric `dir` key even when it claims use=enc", () => {
+    expect(() =>
+      pickEncryptionKey(
+        {
+          keys: [
+            {
+              kid: "kid-eu-dir",
+              alg: "dir",
+              kty: "oct",
+              k: "ZGVhZGJlZWZkZWFkYmVlZmRlYWRiZWVmZGVhZGJlZWY",
+              use: "enc",
+            },
+          ],
+        },
+        "eu",
+      ),
+    ).toThrow(AddToKlarnaError);
+  });
+
+  it("skips a disallowed key and falls through to a valid one within a region", () => {
+    const chosen = pickEncryptionKey(
+      {
+        keys: [{ ...valid("kid-eu-bad-alg"), alg: "dir", kty: "oct" }, valid("kid-eu-good")],
+      },
+      "eu",
+    );
+    expect(chosen.kid).toBe("kid-eu-good");
   });
 });

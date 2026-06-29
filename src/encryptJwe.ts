@@ -4,13 +4,17 @@ import { AddToKlarnaError } from "./errors.js";
 import type { DecryptedPayload } from "./types.js";
 
 /**
- * The content-encryption algorithm. Pinned to the JWE profile that Klarna's
- * backend accepts.
+ * The JWE profile this library produces. Pinned end-to-end:
  *
- * The key-encryption algorithm (`alg`) is read from the JWK rather than
- * hardcoded, so a server-side rotation that swaps `alg` works without a
- * client release as long as `jose` still supports it.
+ * - `ALG` (key-encryption algorithm)
+ * - `ENC` (content-encryption algorithm)
+ *
+ * `pickEncryptionKey` enforces the matching `kty`/`crv` on the JWKS side,
+ * so a JWKS that drifts off this profile fails closed with `NO_MATCHING_KEY`
+ * instead of silently producing a non-decryptable link. Changing either
+ * constant is an SDK-coordinated event with Klarna's backend.
  */
+export const ALG = "ECDH-ES+A256KW";
 export const ENC = "A256GCM";
 
 /**
@@ -19,15 +23,15 @@ export const ENC = "A256GCM";
  */
 export async function encryptJwe(
   payload: DecryptedPayload,
-  key: JWK & { kid: string; alg: string },
+  key: JWK & { kid: string },
 ): Promise<string> {
   let imported: Awaited<ReturnType<typeof importJWK>>;
   try {
-    imported = await importJWK(key, key.alg);
+    imported = await importJWK(key, ALG);
   } catch (cause) {
     throw new AddToKlarnaError(
       "ENCRYPTION_FAILED",
-      `Could not import JWK with kid="${key.kid}" and alg="${key.alg}".`,
+      `Could not import JWK with kid="${key.kid}" for alg="${ALG}".`,
       { cause },
     );
   }
@@ -38,7 +42,7 @@ export async function encryptJwe(
       linkId: payload.linkId,
     })
       .setProtectedHeader({
-        alg: key.alg,
+        alg: ALG,
         enc: ENC,
         kid: key.kid,
         typ: "JWT",
