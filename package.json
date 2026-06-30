@@ -2,6 +2,7 @@
   "name": "@klarna/add-to-klarna",
   "version": "1.0.0",
   "description": "Merchant integration library for generating Klarna 'Add to Klarna' universal links.",
+  "repository": "https://github.com/klarna-incubator/add-to-klarna-js",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.cjs",
