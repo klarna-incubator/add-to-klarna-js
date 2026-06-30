@@ -36,9 +36,9 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Configure npm registry
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - name: Check if version is already published
@@ -62,6 +62,13 @@ jobs:
 
       - name: Publish to npm
         if: steps.version-check.outputs.should_publish == 'true'
+        # Clear the placeholder NODE_AUTH_TOKEN that actions/setup-node exports
+        # when registry-url is set. With it present (even as the placeholder
+        # `XXXXX-XXXXX-XXXXX-XXXXX`), npm uses classic token auth instead of
+        # initiating the OIDC token exchange and Trusted Publishing silently
+        # fails. See actions/setup-node#1440.
+        env:
+          NODE_AUTH_TOKEN: ""
         run: npm publish --provenance --access public
 
       - name: Create GitHub release
