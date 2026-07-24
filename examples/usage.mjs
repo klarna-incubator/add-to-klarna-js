@@ -4,7 +4,7 @@
 //
 //     node examples/usage.mjs [inputId] [brandNickname] [region]
 //
-// Prints the generated universal link.
+// Prints the generated AppsFlyer OneLink.
 
 import { createAddToKlarnaClient } from "../dist/index.js";
 
@@ -19,6 +19,7 @@ const region = process.argv[4] ?? "eu";
 
 const client = createAddToKlarnaClient({
   environment: "production",
+  clientTarget: "pink",
   region,
 });
 

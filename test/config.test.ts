@@ -4,25 +4,42 @@ import { resolveConfig } from "../src/config.js";
 import { AddToKlarnaError } from "../src/errors.js";
 
 describe("resolveConfig", () => {
-  it("resolves production / eu", () => {
-    const config = resolveConfig({ environment: "production", region: "eu" });
+  it("resolves production / pink / eu", () => {
+    const config = resolveConfig({ environment: "production", clientTarget: "pink", region: "eu" });
     expect(config.jwksUrl).toBe("https://app.klarna.com/.well-known/jwks.json");
-    expect(config.linkBaseUrl).toBe("https://app.klarna.com/loyalty-cards-v2/add-to-klarna");
+    expect(config.linkPath).toBe("/loyalty-cards-v2/add-to-klarna");
+    expect(config.oneLinkBaseUrl).toBe("https://l.klarna.com/22XC");
+    expect(config.mediaSource).toBe("WebApp");
+    expect(config.campaignName).toBe("add-to-klarna");
     expect(config.region).toBe("eu");
+    expect(config.desktopFallbackUrl).toBe("https://klarna.com/add-to-klarna");
   });
 
-  it("defaults environment to production when omitted", () => {
+  it("defaults environment and target to production /pink when omitted", () => {
     const config = resolveConfig({ region: "eu" });
     expect(config.jwksUrl).toBe("https://app.klarna.com/.well-known/jwks.json");
-    expect(config.linkBaseUrl).toBe("https://app.klarna.com/loyalty-cards-v2/add-to-klarna");
+    expect(config.linkPath).toBe("/loyalty-cards-v2/add-to-klarna");
+    expect(config.oneLinkBaseUrl).toBe("https://l.klarna.com/22XC");
+    expect(config.mediaSource).toBe("WebApp");
+    expect(config.campaignName).toBe("add-to-klarna");
+    expect(config.region).toBe("eu");
+    expect(config.desktopFallbackUrl).toBe("https://klarna.com/add-to-klarna");
   });
 
-  it("selects the staging JWKS endpoint and the dev scheme for staging", () => {
-    const config = resolveConfig({ environment: "staging", region: "us" });
+  it("selects the staging JWKS endpoint and the staging AppsFlyer OneLink", () => {
+    const config = resolveConfig({ environment: "staging", clientTarget: "staging", region: "us" });
     expect(config.jwksUrl).toMatch(/^https:\/\/.+\/\.well-known\/jwks\.json$/);
     expect(config.jwksUrl).not.toBe("https://app.klarna.com/.well-known/jwks.json");
-    expect(config.linkBaseUrl).toBe("klarnadev://loyalty-cards-v2/add-to-klarna");
+    expect(config.oneLinkBaseUrl).toBe("https://klarnastaging.onelink.me/hV1K");
     expect(config.region).toBe("us");
+    expect(config.desktopFallbackUrl).toBe("https://klarna.com/add-to-klarna");
+  });
+
+  it("does not switch OneLink host or desktop fallback from environment=staging alone", () => {
+    const config = resolveConfig({ environment: "staging", region: "eu" });
+    expect(config.jwksUrl).not.toBe("https://app.klarna.com/.well-known/jwks.json");
+    expect(config.oneLinkBaseUrl).toBe("https://l.klarna.com/22XC");
+    expect(config.desktopFallbackUrl).toBe("https://klarna.com/add-to-klarna");
   });
 
   it("JWKS URL does not change with region (region only picks the key)", () => {
@@ -33,12 +50,14 @@ describe("resolveConfig", () => {
     expect(b.jwksUrl).toBe(c.jwksUrl);
   });
 
-  it("link base URL does not change with region", () => {
+  it("OneLink base URL and link path do not change with region", () => {
     const a = resolveConfig({ environment: "production", region: "eu" });
     const b = resolveConfig({ environment: "production", region: "us" });
     const c = resolveConfig({ environment: "production", region: "ap" });
-    expect(a.linkBaseUrl).toBe(b.linkBaseUrl);
-    expect(b.linkBaseUrl).toBe(c.linkBaseUrl);
+    expect(a.oneLinkBaseUrl).toBe(b.oneLinkBaseUrl);
+    expect(b.oneLinkBaseUrl).toBe(c.oneLinkBaseUrl);
+    expect(a.linkPath).toBe(b.linkPath);
+    expect(b.linkPath).toBe(c.linkPath);
   });
 
   it("accepts the ap region", () => {
@@ -60,6 +79,16 @@ describe("resolveConfig", () => {
       resolveConfig({
         environment: "production",
         region: "asia" as unknown as "eu",
+      }),
+    ).toThrow(AddToKlarnaError);
+  });
+
+  it("rejects an unknown clientTarget", () => {
+    expect(() =>
+      resolveConfig({
+        environment: "production",
+        clientTarget: "dev" as unknown as "pink",
+        region: "eu",
       }),
     ).toThrow(AddToKlarnaError);
   });

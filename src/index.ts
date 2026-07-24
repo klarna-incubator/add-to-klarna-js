@@ -4,6 +4,7 @@ export type {
   AddToKlarnaClient,
   BuildLinkInput,
   ClientOptions,
+  ClientTarget,
   DecryptedPayload,
   Environment,
   Region,
