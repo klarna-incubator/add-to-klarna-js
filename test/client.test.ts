@@ -4,6 +4,7 @@ import { jwtDecrypt } from "jose";
 import { createAddToKlarnaClient } from "../src/client.js";
 import { AddToKlarnaError } from "../src/errors.js";
 import { ENC } from "../src/encryptJwe.js";
+import type { ClientTarget } from "../src/types.js";
 import { fromBase64Url } from "../src/utils.js";
 import { extractEncryptedPayload, generateTestKeypair, mockFetchReturning } from "./fixtures.js";
 
@@ -17,7 +18,7 @@ afterEach(() => {
 });
 
 describe("createAddToKlarnaClient.buildLink (round-trip)", () => {
-  it("produces a URL whose payload decrypts back to {inputId, linkId, iat}", async () => {
+  it("produces an AppsFlyer OneLink whose deep_link_value decrypts back to {inputId, linkId, iat}", async () => {
     const { jwks, privateKey, kid, alg } = await generateTestKeypair("kid-eu-golden");
     mockFetchReturning(jwks);
     jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
@@ -25,14 +26,26 @@ describe("createAddToKlarnaClient.buildLink (round-trip)", () => {
       .spyOn(globalThis.crypto, "randomUUID")
       .mockReturnValue("11111111-1111-4111-8111-111111111111");
 
-    const client = createAddToKlarnaClient({ environment: "staging", region: "eu" });
+    const client = createAddToKlarnaClient({
+      environment: "staging",
+      clientTarget: "staging",
+      region: "eu",
+    });
     const url = await client.buildLink({
       brandNickname: "someBrandNickname",
       inputId: "merchant-123",
     });
 
-    expect(url).toMatch(
-      /^klarnadev:\/\/loyalty-cards-v2\/add-to-klarna\/someBrandNickname\/[A-Za-z0-9_-]+$/,
+    // Outer shape: staging AppsFlyer OneLink.
+    const parsed = new URL(url);
+    expect(parsed.origin + parsed.pathname).toBe("https://klarnastaging.onelink.me/hV1K");
+    expect(parsed.searchParams.get("pid")).toBe("WebApp");
+    expect(parsed.searchParams.get("c")).toBe("add-to-klarna");
+
+    // Deep link value carries the in-app add-to-klarna path.
+    const deepLinkValue = parsed.searchParams.get("deep_link_value")!;
+    expect(deepLinkValue).toMatch(
+      /^\/loyalty-cards-v2\/add-to-klarna\/someBrandNickname\/[A-Za-z0-9_-]+$/,
     );
 
     const compact = fromBase64Url(extractEncryptedPayload(url));
@@ -45,6 +58,31 @@ describe("createAddToKlarnaClient.buildLink (round-trip)", () => {
     expect(protectedHeader.enc).toBe(ENC);
     expect(protectedHeader.typ).toBe("JWT");
     expect(protectedHeader.cty).toBe("application/json");
+  });
+
+  it("targets the production AppsFlyer OneLink prefix when environment=production", async () => {
+    const { jwks } = await generateTestKeypair("kid-eu-prod");
+    mockFetchReturning(jwks);
+
+    const client = createAddToKlarnaClient({ environment: "production", region: "eu" });
+    const url = await client.buildLink({ brandNickname: "x", inputId: "y" });
+
+    expect(url.startsWith("https://l.klarna.com/22XC?")).toBe(true);
+  });
+
+  it("wires the desktop fallback slot from the resolved config", async () => {
+    const { jwks } = await generateTestKeypair("kid-eu-test");
+    mockFetchReturning(jwks);
+
+    const client = createAddToKlarnaClient({
+      environment: "staging",
+      clientTarget: "staging",
+      region: "eu",
+    });
+    const url = await client.buildLink({ brandNickname: "b", inputId: "i" });
+
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("af_web_dp")).toBe("https://klarna.com/add-to-klarna");
   });
 
   it("fetches the JWKS on every call (no in-memory cache)", async () => {
@@ -122,7 +160,7 @@ describe("createAddToKlarnaClient.buildLink (round-trip)", () => {
     });
   });
 
-  it("targets production app.klarna.com for environment=production", async () => {
+  it("targets production app.klarna.com JWKS for environment=production", async () => {
     const fetchMock = jest.fn(
       async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }),
     );
@@ -156,20 +194,22 @@ describe("createAddToKlarnaClient.buildLink (round-trip)", () => {
 });
 
 describe("createAddToKlarnaClient.redirect", () => {
-  it("delegates to window.location.assign with the built URL", async () => {
+  it("delegates to window.location.assign with the built OneLink URL", async () => {
     const { jwks } = await generateTestKeypair("kid-eu-test");
     mockFetchReturning(jwks);
     const assign = jest.fn();
     (globalThis as { window?: unknown }).window = { location: { assign } };
 
-    const client = createAddToKlarnaClient({ environment: "staging", region: "eu" });
+    const client = createAddToKlarnaClient({
+      environment: "staging",
+      clientTarget: "staging",
+      region: "eu",
+    });
     await client.redirect({ brandNickname: "someBrandNickname", inputId: "x" });
 
     expect(assign).toHaveBeenCalledTimes(1);
     const calledUrl = assign.mock.calls[0]![0] as string;
-    expect(
-      calledUrl.startsWith("klarnadev://loyalty-cards-v2/add-to-klarna/someBrandNickname/"),
-    ).toBe(true);
+    expect(calledUrl.startsWith("https://klarnastaging.onelink.me/hV1K?")).toBe(true);
   });
 
   it("throws NAVIGATION_UNAVAILABLE when window is not present", async () => {
@@ -181,6 +221,70 @@ describe("createAddToKlarnaClient.redirect", () => {
     await expect(
       client.redirect({ brandNickname: "someBrandNickname", inputId: "x" }),
     ).rejects.toMatchObject({ code: "NAVIGATION_UNAVAILABLE" });
+  });
+});
+
+describe("createAddToKlarnaClient (clientTarget routing)", () => {
+  it.each<[ClientTarget, string]>([
+    ["pink", "https://l.klarna.com/22XC"],
+    ["internalpink", "https://klarnainternalpink.onelink.me/lXgD"],
+    ["yellow", "https://klarnayellow.onelink.me/JQ8X"],
+    ["staging", "https://klarnastaging.onelink.me/hV1K"],
+    ["oneoff", "https://klarnaoneoff.onelink.me/FaEr"],
+    ["local", "https://klarnalocal.onelink.me/dxUs"],
+  ])("routes buildLink through the %s AppsFlyer OneLink base", async (clientTarget, base) => {
+    const { jwks } = await generateTestKeypair("kid-eu-test");
+    mockFetchReturning(jwks);
+
+    const client = createAddToKlarnaClient({
+      environment: "production",
+      clientTarget,
+      region: "eu",
+    });
+    const url = await client.buildLink({ brandNickname: "x", inputId: "y" });
+
+    expect(url.startsWith(`${base}?`)).toBe(true);
+    expect(new URL(url).origin + new URL(url).pathname).toBe(base);
+  });
+
+  it("defaults clientTarget to `pink` when omitted", async () => {
+    const { jwks } = await generateTestKeypair("kid-eu-test");
+    mockFetchReturning(jwks);
+
+    const client = createAddToKlarnaClient({ environment: "production", region: "eu" });
+    const url = await client.buildLink({ brandNickname: "x", inputId: "y" });
+
+    expect(url.startsWith("https://l.klarna.com/22XC?")).toBe(true);
+  });
+
+  it("keeps the pink OneLink when environment is staging and clientTarget is omitted", async () => {
+    const { jwks } = await generateTestKeypair("kid-eu-test");
+    mockFetchReturning(jwks);
+
+    const client = createAddToKlarnaClient({ environment: "staging", region: "eu" });
+    const url = await client.buildLink({ brandNickname: "x", inputId: "y" });
+
+    expect(url.startsWith("https://l.klarna.com/22XC?")).toBe(true);
+    expect(new URL(url).searchParams.get("af_web_dp")).toBe("https://klarna.com/add-to-klarna");
+  });
+
+  it("clientTarget is independent of environment (staging JWKS + yellow OneLink)", async () => {
+    const { jwks } = await generateTestKeypair("kid-eu-test");
+    const fetchMock = mockFetchReturning(jwks);
+
+    const client = createAddToKlarnaClient({
+      environment: "staging",
+      clientTarget: "yellow",
+      region: "eu",
+    });
+    const url = await client.buildLink({ brandNickname: "x", inputId: "y" });
+
+    // Staging JWKS host still gets hit …
+    const fetchedUrl = fetchMock.mock.calls[0]![0] as string;
+    expect(fetchedUrl).not.toBe("https://app.klarna.com/.well-known/jwks.json");
+    expect(fetchedUrl).toMatch(/\/\.well-known\/jwks\.json$/);
+    // … but the OneLink base URL is the yellow client target.
+    expect(url.startsWith("https://klarnayellow.onelink.me/JQ8X?")).toBe(true);
   });
 });
 
@@ -199,6 +303,16 @@ describe("createAddToKlarnaClient validation at construction time", () => {
       createAddToKlarnaClient({
         environment: "production",
         region: "asia" as unknown as "eu",
+      }),
+    ).toThrow(AddToKlarnaError);
+  });
+
+  it("rejects an invalid clientTarget", () => {
+    expect(() =>
+      createAddToKlarnaClient({
+        environment: "production",
+        clientTarget: "green" as unknown as "pink",
+        region: "eu",
       }),
     ).toThrow(AddToKlarnaError);
   });

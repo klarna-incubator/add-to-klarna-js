@@ -1,5 +1,5 @@
 import { AddToKlarnaError } from "./errors.js";
-import type { ClientOptions, Environment, Region } from "./types.js";
+import type { ClientOptions, ClientTarget, Environment, Region } from "./types.js";
 
 /**
  * Resolved configuration used internally. Everything has been collapsed down
@@ -7,7 +7,26 @@ import type { ClientOptions, Environment, Region } from "./types.js";
  */
 export interface ResolvedConfig {
   jwksUrl: string;
-  linkBaseUrl: string;
+  /**
+   * The in-app deep-link path prefix. Combined with the brand nickname and
+   * encrypted payload by {@link buildLinkPath}, then passed as
+   * `deep_link_value` on the outer AppsFlyer OneLink.
+   */
+  linkPath: string;
+  /**
+   * AppsFlyer OneLink prefix that wraps the encrypted deep link. See
+   * {@link buildOneLinkUrl}.
+   */
+  oneLinkBaseUrl: string;
+  /**
+   * Desktop fallback URL (`af_web_dp`). Always the production add-to-klarna
+   * page — not selected by `environment` or `clientTarget`.
+   */
+  desktopFallbackUrl: string;
+  /** AppsFlyer media source (`pid`). */
+  mediaSource: string;
+  /** AppsFlyer campaign name (`c`). */
+  campaignName: string;
   region: Region;
 }
 
@@ -23,17 +42,44 @@ const JWKS_URLS: Record<Environment, string> = {
 };
 
 /**
- * Base URLs for the universal link. The final URL appended is:
- *
- *     <base>/<brandNickname>/<encryptedPayload>
- *
- * Production uses an HTTPS Universal Link. Staging uses the dev custom scheme
- * so taps open the staging app build directly.
+ * In-app deep-link path prefixes. Combined with `<brandNickname>/<encrypted>`
+ * to form the value of `deep_link_value` on the outer AppsFlyer OneLink. The
+ * Klarna app parses this path and routes to the add-to-klarna screen.
  */
-const LINK_BASE_URLS: Record<Environment, string> = {
-  production: "https://app.klarna.com/loyalty-cards-v2/add-to-klarna",
-  staging: "klarnadev://loyalty-cards-v2/add-to-klarna",
+const LINK_PATHS: Record<Environment, string> = {
+  production: "/loyalty-cards-v2/add-to-klarna",
+  staging: "/loyalty-cards-v2/add-to-klarna",
 };
+
+/**
+ * AppsFlyer OneLink prefixes. Production uses Klarna's custom `l.klarna.com`
+ * short domain; staging uses the standard AppsFlyer `*.onelink.me` host that
+ * targets the staging app build.
+ */
+const ONELINK_BASE_URLS: Record<ClientTarget, string> = {
+  pink: "https://l.klarna.com/22XC",
+  internalpink: "https://klarnainternalpink.onelink.me/lXgD",
+  yellow: "https://klarnayellow.onelink.me/JQ8X",
+  staging: "https://klarnastaging.onelink.me/hV1K",
+  oneoff: "https://klarnaoneoff.onelink.me/FaEr",
+  local: "https://klarnalocal.onelink.me/dxUs",
+};
+
+/**
+ * Desktop fallback (`af_web_dp`). One production page for every environment
+ * and client target — there is no staging-specific fallback.
+ */
+const DESKTOP_FALLBACK_URL = "https://klarna.com/add-to-klarna";
+
+/**
+ * AppsFlyer `pid` (media source).
+ */
+const MEDIA_SOURCE = "WebApp";
+
+/**
+ * AppsFlyer `c` (campaign name).
+ */
+const CAMPAIGN_NAME = "add-to-klarna";
 
 /**
  * Resolve user-facing client options into a concrete config.
@@ -43,7 +89,11 @@ const LINK_BASE_URLS: Record<Environment, string> = {
  * network calls.
  */
 export function resolveConfig(options: ClientOptions): ResolvedConfig {
-  const { environment = "production", region } = options ?? ({} as ClientOptions);
+  const {
+    environment = "production",
+    clientTarget = "pink",
+    region,
+  } = options ?? ({} as ClientOptions);
 
   if (environment !== "production" && environment !== "staging") {
     throw new AddToKlarnaError(
@@ -57,10 +107,27 @@ export function resolveConfig(options: ClientOptions): ResolvedConfig {
       `Unknown region: ${String(region)}. Expected "eu", "us" or "ap".`,
     );
   }
+  if (
+    clientTarget !== "pink" &&
+    clientTarget !== "internalpink" &&
+    clientTarget !== "yellow" &&
+    clientTarget !== "staging" &&
+    clientTarget !== "oneoff" &&
+    clientTarget !== "local"
+  ) {
+    throw new AddToKlarnaError(
+      "INVALID_CONFIG",
+      `Unknown clientTarget: ${String(clientTarget)}. Expected "pink", "internalpink", "yellow", "staging", "oneoff" or "local"`,
+    );
+  }
 
   return {
     jwksUrl: JWKS_URLS[environment],
-    linkBaseUrl: LINK_BASE_URLS[environment],
+    linkPath: LINK_PATHS[environment],
+    oneLinkBaseUrl: ONELINK_BASE_URLS[clientTarget],
+    desktopFallbackUrl: DESKTOP_FALLBACK_URL,
+    mediaSource: MEDIA_SOURCE,
+    campaignName: CAMPAIGN_NAME,
     region,
   };
 }

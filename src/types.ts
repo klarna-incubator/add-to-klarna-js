@@ -1,29 +1,48 @@
 /**
  * The Klarna deployment region the link should target. Selects which key the
  * library picks out of the JWKS (keys are namespaced via a `kid-{region}-`
- * prefix). Does *not* change the JWKS URL or the universal-link host — both
- * are determined solely by {@link Environment}.
+ * prefix). Does *not* change the JWKS URL ({@link Environment}) or the
+ * AppsFlyer OneLink host ({@link ClientTarget}).
  */
 export type Region = "eu" | "us" | "ap";
 
 /**
- * The Klarna environment to target.
+ * The Klarna backend environment to target.
  *
- * - `production` — the production JWKS and universal-link host.
- * - `staging` — the non-production JWKS and a custom URL scheme that opens
- *   Klarna's staging app build. Use this for development and testing only.
+ * - `production` — the production JWKS.
+ * - `staging` — the non-production JWKS. Use this for development and
+ *   testing only.
+ *
+ * Does *not* select the AppsFlyer OneLink host — that is {@link ClientTarget}.
+ * Desktop fallback (`af_web_dp`) is a single production page for every
+ * environment.
  */
 export type Environment = "production" | "staging";
 
 /**
+ * The Klarna client application we are targeting.
+ *
+ * - `pink` — the production application that is available to all of our users
+ * - `internalpink` — the pre-release production application, Klarna internal
+ * - `yellow` — internal build targeting the production backend
+ * - `staging` — internal build targeting the staging backend
+ * - `oneoff` — internal build created from a specific commit, targeting either environment
+ * - `local` — targets the local simulator
+ */
+export type ClientTarget = "pink" | "internalpink" | "yellow" | "staging" | "oneoff" | "local";
+
+/**
  * Options accepted by {@link createAddToKlarnaClient}.
  *
- * Deliberately tiny: just where you are (environment) and which region's key
- * to use. The JWKS endpoint and universal-link host are derived from
- * `environment` alone — they are not configurable.
+ * Deliberately tiny: just which backend (`environment`), which app
+ * (`clientTarget`), and which region's key to use. The JWKS endpoint is
+ * derived from `environment`; the AppsFlyer OneLink host is derived from
+ * `clientTarget`. Desktop fallback is a single production page for every
+ * combination. None of these are otherwise configurable.
  */
 export interface ClientOptions {
   environment?: Environment;
+  clientTarget?: ClientTarget;
   region: Region;
 }
 
@@ -50,7 +69,7 @@ export interface BuildLinkInput {
  */
 export interface AddToKlarnaClient {
   /**
-   * Build a universal link URL without navigating to it.
+   * Build an AppsFlyer OneLink URL without navigating to it.
    *
    * Each call mints a fresh `linkId` and re-fetches the JWKS — no in-memory
    * cache. Caching is delegated to the HTTP layer + Klarna's CDN.

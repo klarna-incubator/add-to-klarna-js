@@ -1,12 +1,12 @@
 # @klarna/add-to-klarna
 
-> Merchant integration library for generating Klarna "Add to Klarna" universal links.
+> Merchant integration library for generating Klarna "Add to Klarna" AppsFlyer OneLinks.
 
 [![Build Status][ci-image]][ci-url]
 [![License][license-image]][license-url]
 [![Developed at Klarna][klarna-image]][klarna-url]
 
-Lets a merchant page turn a `brandNickname` + `inputId` into a fully encrypted Klarna universal link in one call, without the merchant having to touch JWE, JWKS, key rotation, or URL encoding.
+Lets a merchant page turn a `brandNickname` + `inputId` into a fully encrypted Klarna AppsFlyer OneLink in one call, without the merchant having to touch JWE, JWKS, key rotation, or URL encoding.
 
 ## Install
 
@@ -79,7 +79,7 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 
 ```html
 <script type="module">
-  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@1.0.0";
+  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@2.0.0";
 
   const klarna = createAddToKlarnaClient({ region: "eu" });
 
@@ -92,45 +92,70 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 </script>
 ```
 
-`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@1.0.0/+esm`,
-and `https://unpkg.com/@klarna/add-to-klarna@1.0.0?module` all serve the
+`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@2.0.0/+esm`,
+and `https://unpkg.com/@klarna/add-to-klarna@2.0.0?module` all serve the
 ESM build and resolve the `jose` dependency transparently. Always pin a
 version in production so a future release can't change behaviour under
 your page.
 
 ## Configuration
 
-Just two options. Only `region` is required — `environment` defaults to
-`"production"`, so a merchant integration can usually pass just the region.
+Only `region` is required. `environment` defaults to `"production"` and
+`clientTarget` defaults to `"pink"` — the public production Klarna app —
+so a merchant integration can usually pass just the region.
 
-| Option        | Type                        | Default        | Description                                                                                      |
-| ------------- | --------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
-| `environment` | `"production" \| "staging"` | `"production"` | Which Klarna deployment to target. Picks both the JWKS endpoint and the universal-link base URL. |
-| `region`      | `"eu" \| "us" \| "ap"`      | _(required)_   | Which deployment region to target. Picks the key inside the JWKS via a `kid-{region}-` prefix.   |
+| Option         | Type                                                                       | Default        | Description                                                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `environment`  | `"production" \| "staging"`                                                | `"production"` | Which Klarna backend to target. Picks the JWKS endpoint. Desktop fallback is the same production page for every environment.                                           |
+| `clientTarget` | `"pink" \| "internalpink" \| "yellow" \| "staging" \| "oneoff" \| "local"` | `"pink"`       | Which Klarna client application to target. Picks the AppsFlyer OneLink base URL. Merchants should leave this at `"pink"`; the other values are Klarna-internal builds. |
+| `region`       | `"eu" \| "us" \| "ap"`                                                     | _(required)_   | Which deployment region to target. Picks the key inside the JWKS via a `kid-{region}-` prefix.                                                                         |
 
-That's it. There are no other knobs — by design. The JWKS endpoint, the
-universal-link host, the clock, the UUID generator, and the `fetch`
-implementation are all fixed (the library uses `globalThis.fetch`,
-`Date.now`, and `globalThis.crypto.randomUUID`).
+`environment` and `clientTarget` are independent by design: internal builds
+of the Klarna app (`yellow`, `oneoff`, `local`, …) can point at either the
+production or the staging backend, so the JWKS host and the AppsFlyer host
+are configured separately.
+
+There are no other knobs — by design. The clock, the UUID generator, and
+the `fetch` implementation are all fixed (the library uses
+`globalThis.fetch`, `Date.now`, and `globalThis.crypto.randomUUID`).
 
 ## URL shape
 
-The library always emits a URL of this shape:
+The library emits an [AppsFlyer OneLink](https://support.appsflyer.com/hc/en-us/articles/207032246-OneLink-link-management) URL that routes based on the device:
+
+- **Mobile with the Klarna app installed** — opens the app to the add-to-klarna deep link.
+- **Mobile without the app** — AppsFlyer routes to the App Store / Play Store per the OneLink template configuration and replays the deep link after install (deferred deep linking).
+- **Desktop** — falls back to `https://klarna.com/add-to-klarna` (`af_web_dp`).
+
+The composed URL has the shape:
 
 ```
-<base>/<brandNickname>/<base64UrlEncodedPayload>
+<oneLinkBase>?pid=WebApp
+  &c=add-to-klarna
+  &deep_link_value=<url-encoded /loyalty-cards-v2/add-to-klarna/<brandNickname>/<encryptedPayload>>
+  &af_web_dp=<desktop fallback URL>
 ```
 
-The `<base>` is fixed per environment (and already contains the
-`/add-to-klarna` route segment):
+The `<oneLinkBase>` is fixed per `clientTarget`:
 
-| Environment  | Base URL                                                |
-| ------------ | ------------------------------------------------------- |
-| `production` | `https://app.klarna.com/loyalty-cards-v2/add-to-klarna` |
-| `staging`    | `klarnadev://loyalty-cards-v2/add-to-klarna`            |
+| `clientTarget` | OneLink base URL                             |
+| -------------- | -------------------------------------------- |
+| `pink`         | `https://l.klarna.com/22XC`                  |
+| `internalpink` | `https://klarnainternalpink.onelink.me/lXgD` |
+| `yellow`       | `https://klarnayellow.onelink.me/JQ8X`       |
+| `staging`      | `https://klarnastaging.onelink.me/hV1K`      |
+| `oneoff`       | `https://klarnaoneoff.onelink.me/FaEr`       |
+| `local`        | `https://klarnalocal.onelink.me/dxUs`        |
 
-The `<base64UrlEncodedPayload>` is the JWE compact serialization wrapped in an
-extra base64url so the entire ciphertext fits in a single URL path component.
+The library only sets `af_web_dp` (the desktop fallback) on the URL itself.
+The App Store / Play Store fallbacks for mobile are configured on the
+AppsFlyer OneLink template, not on the URL. Desktop fallback is always
+`https://klarna.com/add-to-klarna` — the same production page for every
+`environment` and `clientTarget`. Merchants don't (and can't) configure it.
+This keeps the merchant API surface identical to v1: just `brandNickname`
+and `inputId`.
+
+The `<encryptedPayload>` inside `deep_link_value` is the JWE compact serialization wrapped in an extra base64url so the entire ciphertext fits in a single deep-link path component (the dots in the JWE compact form would otherwise break the Klarna app's in-app router).
 
 ## API
 
@@ -141,7 +166,7 @@ first network call happens on the first `buildLink` / `redirect`.
 
 ### `client.buildLink({ brandNickname, inputId })`
 
-Returns `Promise<string>` — the fully-formed universal link URL.
+Returns `Promise<string>` — the fully-formed AppsFlyer OneLink URL.
 
 A fresh `linkId` is minted on every call (and embedded inside the encrypted
 payload, not exposed on the surface). The Klarna backend enforces single-use
@@ -211,7 +236,7 @@ on the code, not on the message.
 
 | Code                     | Meaning                                                                                                                      |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `INVALID_CONFIG`         | A client option was invalid (e.g. unknown `environment` or `region`).                                                        |
+| `INVALID_CONFIG`         | A client option was invalid (e.g. unknown `environment`, `clientTarget` or `region`).                                        |
 | `INVALID_INPUT`          | Missing / malformed `brandNickname` or `inputId`.                                                                            |
 | `JWKS_FETCH_FAILED`      | Could not reach the JWKS endpoint, or the endpoint returned a non-2xx HTTP status.                                           |
 | `JWKS_INVALID`           | The JWKS body was not valid JSON, or did not contain a `keys` array.                                                         |
