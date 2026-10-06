@@ -43,11 +43,23 @@ export async function generateTestKeypair(
 }
 
 /**
- * Pull the encrypted-payload segment out of a built link.
+ * Pull the encrypted-payload segment out of a built AppsFlyer OneLink URL.
+ *
+ * The OneLink URL has shape:
+ *
+ *     https://l.klarna.com/22XC?...&deep_link_value=<encoded /path/.../<brand>/<payload>>&...
+ *
+ * We decode `deep_link_value` and return its last path segment (the base64url
+ * JWE wrap that {@link buildLinkPath} produced).
  */
-export function extractEncryptedPayload(url: string): string {
-  const tail = url.split("/").pop();
-  if (!tail) throw new Error(`URL has no trailing segment: ${url}`);
+export function extractEncryptedPayload(oneLinkUrl: string): string {
+  const url = new URL(oneLinkUrl);
+  const deepLinkValue = url.searchParams.get("deep_link_value");
+  if (!deepLinkValue) {
+    throw new Error(`OneLink URL missing \`deep_link_value\`: ${oneLinkUrl}`);
+  }
+  const tail = deepLinkValue.split("/").pop();
+  if (!tail) throw new Error(`\`deep_link_value\` has no trailing segment: ${deepLinkValue}`);
   return tail;
 }
 

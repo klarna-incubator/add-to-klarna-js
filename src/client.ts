@@ -1,9 +1,10 @@
-import { buildLinkUrl } from "./buildLinkUrl.js";
+import { buildLinkPath } from "./buildLinkPath.js";
 import { buildPayload } from "./buildPayload.js";
 import { resolveConfig } from "./config.js";
 import { encryptJwe } from "./encryptJwe.js";
 import { AddToKlarnaError } from "./errors.js";
 import { fetchJwks, pickEncryptionKey } from "./jwksClient.js";
+import { buildOneLinkUrl } from "./oneLink.js";
 import type { AddToKlarnaClient, BuildLinkInput, ClientOptions } from "./types.js";
 
 /**
@@ -12,6 +13,15 @@ import type { AddToKlarnaClient, BuildLinkInput, ClientOptions } from "./types.j
  * Construction is cheap and synchronous: it validates options and wires up
  * the pipeline. The first network call happens on the first
  * {@link AddToKlarnaClient.buildLink} / {@link AddToKlarnaClient.redirect}.
+ *
+ * Each `buildLink` returns an AppsFlyer OneLink that:
+ *
+ *  - opens the Klarna app to the encrypted add-to-klarna deep link when the
+ *    app is installed,
+ *  - falls back to the App Store / Play Store on mobile when the app is not
+ *    installed (deferred deep link replays after install),
+ *  - falls back to `https://klarna.com/add-to-klarna` on desktop.
+ *
  * Every `buildLink` re-fetches the JWKS — caching is handled by the HTTP
  * layer and Klarna's CDN, not in memory.
  */
@@ -29,7 +39,14 @@ export function createAddToKlarnaClient(options: ClientOptions): AddToKlarnaClie
     const jwks = await fetchJwks(config.jwksUrl);
     const key = pickEncryptionKey(jwks, config.region);
     const jwe = await encryptJwe(payload, key);
-    return buildLinkUrl(config.linkBaseUrl, input.brandNickname, jwe);
+    const deepLinkValue = buildLinkPath(config.linkPath, input.brandNickname, jwe);
+    return buildOneLinkUrl({
+      oneLinkBaseUrl: config.oneLinkBaseUrl,
+      pid: config.mediaSource,
+      c: config.campaignName,
+      deepLinkValue,
+      webFallbackUrl: config.desktopFallbackUrl,
+    });
   }
 
   async function redirect(input: BuildLinkInput): Promise<void> {
