@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 
 import { resolveConfig } from "../src/config.js";
 import { AddToKlarnaError } from "../src/errors.js";
+import type { ClientTarget } from "../src/types.js";
 
 describe("resolveConfig", () => {
   it("resolves production / pink / eu", () => {
@@ -9,6 +10,7 @@ describe("resolveConfig", () => {
     expect(config.jwksUrl).toBe("https://app.klarna.com/.well-known/jwks.json");
     expect(config.linkPath).toBe("/loyalty-cards-v2/add-to-klarna");
     expect(config.oneLinkBaseUrl).toBe("https://l.klarna.com/22XC");
+    expect(config.appUriScheme).toBe("klarna://");
     expect(config.mediaSource).toBe("WebApp");
     expect(config.campaignName).toBe("add-to-klarna");
     expect(config.region).toBe("eu");
@@ -20,6 +22,7 @@ describe("resolveConfig", () => {
     expect(config.jwksUrl).toBe("https://app.klarna.com/.well-known/jwks.json");
     expect(config.linkPath).toBe("/loyalty-cards-v2/add-to-klarna");
     expect(config.oneLinkBaseUrl).toBe("https://l.klarna.com/22XC");
+    expect(config.appUriScheme).toBe("klarna://");
     expect(config.mediaSource).toBe("WebApp");
     expect(config.campaignName).toBe("add-to-klarna");
     expect(config.region).toBe("eu");
@@ -31,6 +34,7 @@ describe("resolveConfig", () => {
     expect(config.jwksUrl).toMatch(/^https:\/\/.+\/\.well-known\/jwks\.json$/);
     expect(config.jwksUrl).not.toBe("https://app.klarna.com/.well-known/jwks.json");
     expect(config.oneLinkBaseUrl).toBe("https://klarnastaging.onelink.me/hV1K");
+    expect(config.appUriScheme).toBe("klarnastaging://");
     expect(config.region).toBe("us");
     expect(config.desktopFallbackUrl).toBe("https://klarna.com/add-to-klarna");
   });
@@ -39,7 +43,24 @@ describe("resolveConfig", () => {
     const config = resolveConfig({ environment: "staging", region: "eu" });
     expect(config.jwksUrl).not.toBe("https://app.klarna.com/.well-known/jwks.json");
     expect(config.oneLinkBaseUrl).toBe("https://l.klarna.com/22XC");
+    expect(config.appUriScheme).toBe("klarna://");
     expect(config.desktopFallbackUrl).toBe("https://klarna.com/add-to-klarna");
+  });
+
+  it.each<[ClientTarget, string]>([
+    ["pink", "klarna://"],
+    ["internalpink", "klarnainternalpink://"],
+    ["yellow", "klarnayellow://"],
+    ["staging", "klarnastaging://"],
+    ["oneoff", "klarnaoneoff://"],
+    ["local", "klarnadev://"],
+  ])("selects the %s app URI scheme", (clientTarget, scheme) => {
+    const config = resolveConfig({
+      environment: "production",
+      clientTarget,
+      region: "eu",
+    });
+    expect(config.appUriScheme).toBe(scheme);
   });
 
   it("JWKS URL does not change with region (region only picks the key)", () => {

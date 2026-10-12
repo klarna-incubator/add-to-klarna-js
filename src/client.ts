@@ -44,6 +44,7 @@ export function createAddToKlarnaClient(options: ClientOptions): AddToKlarnaClie
       oneLinkBaseUrl: config.oneLinkBaseUrl,
       pid: config.mediaSource,
       c: config.campaignName,
+      appUriScheme: config.appUriScheme,
       deepLinkValue,
       webFallbackUrl: config.desktopFallbackUrl,
     });

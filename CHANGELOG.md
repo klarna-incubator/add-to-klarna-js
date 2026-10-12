@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- OneLink URLs now include `af_dp`, the Add to Klarna path on the custom
+  scheme for the targeted Klarna build (for example
+  `klarnaoneoff://loyalty-cards-v2/add-to-klarna/<brand>/<payload>`). Android
+  uses this to open the app on that screen when the https OneLink is not
+  claimed as an App Link. A bare scheme opens the app and leaves it on the
+  home screen. `deep_link_value` is unchanged and remains the in-app path.
+
 ## [2.0.0] - 2026-09-22
 
 ### Changed (breaking)

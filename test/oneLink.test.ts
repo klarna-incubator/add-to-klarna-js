@@ -7,6 +7,7 @@ const VALID_INPUT: BuildOneLinkInput = {
   oneLinkBaseUrl: "https://l.klarna.com/22XC",
   pid: "WebApp",
   c: "add-to-klarna",
+  appUriScheme: "klarna://",
   deepLinkValue: "/loyalty-cards-v2/add-to-klarna/someBrand/abc123",
   webFallbackUrl: "https://www.klarna.com/download",
 };
@@ -36,15 +37,21 @@ describe("buildOneLinkUrl", () => {
     const parsed = new URL(url);
     expect(parsed.searchParams.get("pid")).toBe("WebApp");
     expect(parsed.searchParams.get("c")).toBe("add-to-klarna");
+    expect(parsed.searchParams.get("af_dp")).toBe(
+      "klarna://loyalty-cards-v2/add-to-klarna/someBrand/abc123",
+    );
     expect(parsed.searchParams.get("deep_link_value")).toBe(
       "/loyalty-cards-v2/add-to-klarna/someBrand/abc123",
     );
     expect(parsed.searchParams.get("af_web_dp")).toBe("https://www.klarna.com/download");
   });
 
-  it("URL-encodes each param value (slashes in deep_link_value; `:` in af_web_dp)", () => {
+  it("URL-encodes each param value (slashes in deep_link_value; `:` in af_dp and af_web_dp)", () => {
     const url = buildOneLinkUrl(VALID_INPUT);
 
+    expect(url).toContain(
+      "af_dp=" + encodeURIComponent("klarna://loyalty-cards-v2/add-to-klarna/someBrand/abc123"),
+    );
     expect(url).toContain(
       "deep_link_value=" + encodeURIComponent("/loyalty-cards-v2/add-to-klarna/someBrand/abc123"),
     );
@@ -55,7 +62,7 @@ describe("buildOneLinkUrl", () => {
     const url = buildOneLinkUrl(VALID_INPUT);
     const query = url.slice(url.indexOf("?") + 1);
     const keys = query.split("&").map((p) => p.split("=")[0]);
-    expect(keys).toEqual(["pid", "c", "deep_link_value", "af_web_dp"]);
+    expect(keys).toEqual(["pid", "c", "af_dp", "deep_link_value", "af_web_dp"]);
   });
 
   it.each<[string, string]>([
@@ -87,6 +94,13 @@ describe("buildOneLinkUrl", () => {
 
     it("rejects an empty c with INVALID_CONFIG", () => {
       expectErrorCode(() => buildOneLinkUrl({ ...VALID_INPUT, c: "" }), "INVALID_CONFIG");
+    });
+
+    it("rejects an empty appUriScheme with INVALID_CONFIG", () => {
+      expectErrorCode(
+        () => buildOneLinkUrl({ ...VALID_INPUT, appUriScheme: "" }),
+        "INVALID_CONFIG",
+      );
     });
 
     it("rejects an empty deepLinkValue with INVALID_INPUT", () => {
