@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-12
+
 ### Fixed
 
 - OneLink URLs now include `af_dp`, the Add to Klarna path on the custom
@@ -71,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Markdown link dfn's -->
 
-[unreleased]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v2.0.0...HEAD
+[unreleased]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/klarna-incubator/add-to-klarna-js/releases/tag/v2.0.0
 [1.0.0]: https://github.com/klarna-incubator/add-to-klarna-js/releases/tag/v1.0.0

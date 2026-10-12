@@ -79,7 +79,7 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 
 ```html
 <script type="module">
-  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@2.0.0";
+  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@2.0.1";
 
   const klarna = createAddToKlarnaClient({ region: "eu" });
 
@@ -92,8 +92,8 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 </script>
 ```
 
-`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@2.0.0/+esm`,
-and `https://unpkg.com/@klarna/add-to-klarna@2.0.0?module` all serve the
+`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@2.0.1/+esm`,
+and `https://unpkg.com/@klarna/add-to-klarna@2.0.1?module` all serve the
 ESM build and resolve the `jose` dependency transparently. Always pin a
 version in production so a future release can't change behaviour under
 your page.
