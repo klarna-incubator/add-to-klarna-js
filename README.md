@@ -79,7 +79,7 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 
 ```html
 <script type="module">
-  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@2.0.0";
+  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@2.0.1";
 
   const klarna = createAddToKlarnaClient({ region: "eu" });
 
@@ -92,8 +92,8 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 </script>
 ```
 
-`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@2.0.0/+esm`,
-and `https://unpkg.com/@klarna/add-to-klarna@2.0.0?module` all serve the
+`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@2.0.1/+esm`,
+and `https://unpkg.com/@klarna/add-to-klarna@2.0.1?module` all serve the
 ESM build and resolve the `jose` dependency transparently. Always pin a
 version in production so a future release can't change behaviour under
 your page.
@@ -132,22 +132,25 @@ The composed URL has the shape:
 ```
 <oneLinkBase>?pid=WebApp
   &c=add-to-klarna
+  &af_dp=<url-encoded scheme + /loyalty-cards-v2/add-to-klarna/<brandNickname>/<encryptedPayload>>
   &deep_link_value=<url-encoded /loyalty-cards-v2/add-to-klarna/<brandNickname>/<encryptedPayload>>
   &af_web_dp=<desktop fallback URL>
 ```
 
-The `<oneLinkBase>` is fixed per `clientTarget`:
+`deep_link_value` is the in-app path AppsFlyer reads after the app is open. `af_dp` is the address Android opens when the https OneLink is not claimed as an App Link. It is the same path on the build's custom scheme (`klarnaoneoff://loyalty-cards-v2/add-to-klarna/...`), because a bare `klarnaoneoff://` launches the app and leaves it on the home screen. The app inserts a third slash before it matches the route.
 
-| `clientTarget` | OneLink base URL                             |
-| -------------- | -------------------------------------------- |
-| `pink`         | `https://l.klarna.com/22XC`                  |
-| `internalpink` | `https://klarnainternalpink.onelink.me/lXgD` |
-| `yellow`       | `https://klarnayellow.onelink.me/JQ8X`       |
-| `staging`      | `https://klarnastaging.onelink.me/hV1K`      |
-| `oneoff`       | `https://klarnaoneoff.onelink.me/FaEr`       |
-| `local`        | `https://klarnalocal.onelink.me/dxUs`        |
+The `<oneLinkBase>` and `af_dp` scheme are fixed per `clientTarget`:
 
-The library only sets `af_web_dp` (the desktop fallback) on the URL itself.
+| `clientTarget` | OneLink base URL                             | `af_dp` scheme          |
+| -------------- | -------------------------------------------- | ----------------------- |
+| `pink`         | `https://l.klarna.com/22XC`                  | `klarna://`             |
+| `internalpink` | `https://klarnainternalpink.onelink.me/lXgD` | `klarnainternalpink://` |
+| `yellow`       | `https://klarnayellow.onelink.me/JQ8X`       | `klarnayellow://`       |
+| `staging`      | `https://klarnastaging.onelink.me/hV1K`      | `klarnastaging://`      |
+| `oneoff`       | `https://klarnaoneoff.onelink.me/FaEr`       | `klarnaoneoff://`       |
+| `local`        | `https://klarnalocal.onelink.me/dxUs`        | `klarnadev://`          |
+
+The library sets `af_dp` (the screen on the app's custom scheme) and `af_web_dp` (the desktop fallback) on the URL itself.
 The App Store / Play Store fallbacks for mobile are configured on the
 AppsFlyer OneLink template, not on the URL. Desktop fallback is always
 `https://klarna.com/add-to-klarna` — the same production page for every

@@ -19,6 +19,12 @@ export interface ResolvedConfig {
    */
   oneLinkBaseUrl: string;
   /**
+   * Custom URI scheme for the targeted Klarna app, including `://`.
+   * {@link buildOneLinkUrl} appends the in-app path and sends the result as
+   * `af_dp`. Selected by `clientTarget`, not by `environment`.
+   */
+  appUriScheme: string;
+  /**
    * Desktop fallback URL (`af_web_dp`). Always the production add-to-klarna
    * page — not selected by `environment` or `clientTarget`.
    */
@@ -63,6 +69,20 @@ const ONELINK_BASE_URLS: Record<ClientTarget, string> = {
   staging: "https://klarnastaging.onelink.me/hV1K",
   oneoff: "https://klarnaoneoff.onelink.me/FaEr",
   local: "https://klarnalocal.onelink.me/dxUs",
+};
+
+/**
+ * Custom URI schemes, one per `clientTarget`. These match the schemes the
+ * Klarna app registers (`klarna` plus the build suffix). {@link buildOneLinkUrl}
+ * appends the in-app path before sending the result as `af_dp`.
+ */
+const APP_URI_SCHEMES: Record<ClientTarget, string> = {
+  pink: "klarna://",
+  internalpink: "klarnainternalpink://",
+  yellow: "klarnayellow://",
+  staging: "klarnastaging://",
+  oneoff: "klarnaoneoff://",
+  local: "klarnadev://",
 };
 
 /**
@@ -125,6 +145,7 @@ export function resolveConfig(options: ClientOptions): ResolvedConfig {
     jwksUrl: JWKS_URLS[environment],
     linkPath: LINK_PATHS[environment],
     oneLinkBaseUrl: ONELINK_BASE_URLS[clientTarget],
+    appUriScheme: APP_URI_SCHEMES[clientTarget],
     desktopFallbackUrl: DESKTOP_FALLBACK_URL,
     mediaSource: MEDIA_SOURCE,
     campaignName: CAMPAIGN_NAME,

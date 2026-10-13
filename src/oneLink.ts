@@ -18,12 +18,20 @@ export interface BuildOneLinkInput {
   c: string;
 
   /**
-   * The in-app deep link path. Sent as `deep_link_value`. When the Klarna app
-   * is installed on the device, AppsFlyer hands this string to the app for
-   * in-app routing; when the app is not installed, AppsFlyer stores it and
-   * replays it after install (deferred deep linking).
+   * The in-app deep link path. Sent as `deep_link_value`. AppsFlyer hands
+   * this string to the app for in-app routing once the app is open, and
+   * replays it after install when the app was not installed (deferred deep
+   * linking). It does not launch the app.
    */
   deepLinkValue: string;
+
+  /**
+   * Custom URI scheme for the targeted Klarna build, including `://`
+   * (for example `klarna://` or `klarnaoneoff://`). Combined with
+   * `deepLinkValue` and sent as `af_dp`, so the address that launches the
+   * app is also the screen.
+   */
+  appUriScheme: string;
 
   /** Desktop fallback URL. Sent as `af_web_dp`. */
   webFallbackUrl: string;
@@ -32,24 +40,31 @@ export interface BuildOneLinkInput {
 /**
  * Compose an AppsFlyer OneLink URL that:
  *
- *  - opens the Klarna app to the given `deepLinkValue` when the app is
- *    installed on iOS or Android,
+ *  - launches the installed Klarna app directly to `deepLinkValue` via `af_dp`,
  *  - falls back to the App Store / Play Store (configured on the OneLink
  *    template, not on this URL) when the app is not installed on mobile,
  *  - falls back to `webFallbackUrl` on desktop.
  *
  * The returned URL has the shape:
  *
- *     <oneLinkBaseUrl>?pid=<pid>&c=<c>&deep_link_value=<url-encoded deepLinkValue>
+ *     <oneLinkBaseUrl>?pid=<pid>&c=<c>&af_dp=<url-encoded scheme + deepLinkValue>
+ *       &deep_link_value=<url-encoded deepLinkValue>
  *       &af_web_dp=<url-encoded webFallbackUrl>
  *
- * Throws `AddToKlarnaError` with `INVALID_CONFIG` if any URL is missing or
- * malformed, or `INVALID_INPUT` if `deepLinkValue` is empty.
+ * `af_dp` uses two slashes (`klarnaoneoff://loyalty-cards-v2/...`). The Klarna
+ * app inserts the third slash before matching the path. A bare scheme opens
+ * the app and leaves it on the home screen, because that launch address has
+ * no route.
+ *
+ * Throws `AddToKlarnaError` with `INVALID_CONFIG` if any URL or the app URI
+ * scheme is missing or malformed, or `INVALID_INPUT` if `deepLinkValue` is
+ * empty.
  */
 export function buildOneLinkUrl(input: BuildOneLinkInput): string {
   requireNonEmptyString("oneLinkBaseUrl", input.oneLinkBaseUrl, "INVALID_CONFIG");
   requireNonEmptyString("pid", input.pid, "INVALID_CONFIG");
   requireNonEmptyString("c", input.c, "INVALID_CONFIG");
+  requireNonEmptyString("appUriScheme", input.appUriScheme, "INVALID_CONFIG");
   requireNonEmptyString("deepLinkValue", input.deepLinkValue, "INVALID_INPUT");
   requireHttpUrl("webFallbackUrl", input.webFallbackUrl);
 
@@ -58,6 +73,7 @@ export function buildOneLinkUrl(input: BuildOneLinkInput): string {
   const params: Array<[string, string]> = [
     ["pid", input.pid],
     ["c", input.c],
+    ["af_dp", buildAppDeepLink(input.appUriScheme, input.deepLinkValue)],
     ["deep_link_value", input.deepLinkValue],
     ["af_web_dp", input.webFallbackUrl],
   ];
@@ -65,6 +81,15 @@ export function buildOneLinkUrl(input: BuildOneLinkInput): string {
   const query = params.map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&");
 
   return `${input.oneLinkBaseUrl}?${query}`;
+}
+
+/**
+ * `scheme://` + path, without a leading slash on the path, so the result is
+ * `klarnaoneoff://loyalty-cards-v2/add-to-klarna/...` rather than three slashes.
+ */
+function buildAppDeepLink(appUriScheme: string, deepLinkValue: string): string {
+  const path = deepLinkValue.startsWith("/") ? deepLinkValue.slice(1) : deepLinkValue;
+  return `${appUriScheme}${path}`;
 }
 
 function requireNonEmptyString(
