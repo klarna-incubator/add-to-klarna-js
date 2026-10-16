@@ -79,7 +79,7 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 
 ```html
 <script type="module">
-  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@2.0.1";
+  import { createAddToKlarnaClient } from "https://esm.sh/@klarna/add-to-klarna@2.0.2";
 
   const klarna = createAddToKlarnaClient({ region: "eu" });
 
@@ -92,8 +92,8 @@ Drop the library straight into an HTML page via an ESM-aware CDN — no
 </script>
 ```
 
-`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@2.0.1/+esm`,
-and `https://unpkg.com/@klarna/add-to-klarna@2.0.1?module` all serve the
+`esm.sh` (above), `https://cdn.jsdelivr.net/npm/@klarna/add-to-klarna@2.0.2/+esm`,
+and `https://unpkg.com/@klarna/add-to-klarna@2.0.2?module` all serve the
 ESM build and resolve the `jose` dependency transparently. Always pin a
 version in production so a future release can't change behaviour under
 your page.
@@ -132,6 +132,7 @@ The composed URL has the shape:
 ```
 <oneLinkBase>?pid=WebApp
   &c=add-to-klarna
+  &af_param_forwarding=false
   &af_dp=<url-encoded scheme + /loyalty-cards-v2/add-to-klarna/<brandNickname>/<encryptedPayload>>
   &deep_link_value=<url-encoded /loyalty-cards-v2/add-to-klarna/<brandNickname>/<encryptedPayload>>
   &af_web_dp=<desktop fallback URL>
@@ -150,7 +151,7 @@ The `<oneLinkBase>` and `af_dp` scheme are fixed per `clientTarget`:
 | `oneoff`       | `https://klarnaoneoff.onelink.me/FaEr`       | `klarnaoneoff://`       |
 | `local`        | `https://klarnalocal.onelink.me/dxUs`        | `klarnadev://`          |
 
-The library sets `af_dp` (the screen on the app's custom scheme) and `af_web_dp` (the desktop fallback) on the URL itself.
+The library sets `af_dp` (the screen on the app's custom scheme), `af_web_dp` (the desktop fallback), and `af_param_forwarding=false` on the URL itself. Parameter forwarding stays off so AppsFlyer opens the desktop page without copying `af_dp` and `deep_link_value` onto it. The app still reads those from the OneLink.
 The App Store / Play Store fallbacks for mobile are configured on the
 AppsFlyer OneLink template, not on the URL. Desktop fallback is always
 `https://klarna.com/add-to-klarna` — the same production page for every

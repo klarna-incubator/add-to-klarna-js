@@ -37,6 +37,7 @@ describe("buildOneLinkUrl", () => {
     const parsed = new URL(url);
     expect(parsed.searchParams.get("pid")).toBe("WebApp");
     expect(parsed.searchParams.get("c")).toBe("add-to-klarna");
+    expect(parsed.searchParams.get("af_param_forwarding")).toBe("false");
     expect(parsed.searchParams.get("af_dp")).toBe(
       "klarna://loyalty-cards-v2/add-to-klarna/someBrand/abc123",
     );
@@ -62,7 +63,14 @@ describe("buildOneLinkUrl", () => {
     const url = buildOneLinkUrl(VALID_INPUT);
     const query = url.slice(url.indexOf("?") + 1);
     const keys = query.split("&").map((p) => p.split("=")[0]);
-    expect(keys).toEqual(["pid", "c", "af_dp", "deep_link_value", "af_web_dp"]);
+    expect(keys).toEqual([
+      "pid",
+      "c",
+      "af_param_forwarding",
+      "af_dp",
+      "deep_link_value",
+      "af_web_dp",
+    ]);
   });
 
   it.each<[string, string]>([
