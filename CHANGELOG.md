@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-10-16
+
+### Fixed
+
+- OneLink URLs set `af_param_forwarding=false`. AppsFlyer was copying `af_dp`
+  and `deep_link_value` onto the desktop fallback, and the localized
+  klarna.com URL then exceeded CloudFront's length limit and returned 403.
+  The app still receives both parameters from the OneLink.
+
 ## [2.0.1] - 2026-10-12
 
 ### Fixed
@@ -73,7 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Markdown link dfn's -->
 
-[unreleased]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v2.0.1...HEAD
+[unreleased]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/klarna-incubator/add-to-klarna-js/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/klarna-incubator/add-to-klarna-js/releases/tag/v2.0.0
 [1.0.0]: https://github.com/klarna-incubator/add-to-klarna-js/releases/tag/v1.0.0

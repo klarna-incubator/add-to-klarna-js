@@ -47,9 +47,17 @@ export interface BuildOneLinkInput {
  *
  * The returned URL has the shape:
  *
- *     <oneLinkBaseUrl>?pid=<pid>&c=<c>&af_dp=<url-encoded scheme + deepLinkValue>
+ *     <oneLinkBaseUrl>?pid=<pid>&c=<c>&af_param_forwarding=false
+ *       &af_dp=<url-encoded scheme + deepLinkValue>
  *       &deep_link_value=<url-encoded deepLinkValue>
  *       &af_web_dp=<url-encoded webFallbackUrl>
+ *
+ * `af_param_forwarding=false` keeps AppsFlyer from copying the other query
+ * parameters onto `af_web_dp`. The OneLink template forwards them otherwise,
+ * and the desktop page then redirects to a localized URL that repeats the
+ * payload in `grs`. With both `af_dp` and `deep_link_value` that URL passes
+ * CloudFront's length limit and the fallback returns 403. The app still
+ * receives `af_dp` and `deep_link_value` from the OneLink itself.
  *
  * `af_dp` uses two slashes (`klarnaoneoff://loyalty-cards-v2/...`). The Klarna
  * app inserts the third slash before matching the path. A bare scheme opens
@@ -73,6 +81,7 @@ export function buildOneLinkUrl(input: BuildOneLinkInput): string {
   const params: Array<[string, string]> = [
     ["pid", input.pid],
     ["c", input.c],
+    ["af_param_forwarding", "false"],
     ["af_dp", buildAppDeepLink(input.appUriScheme, input.deepLinkValue)],
     ["deep_link_value", input.deepLinkValue],
     ["af_web_dp", input.webFallbackUrl],
